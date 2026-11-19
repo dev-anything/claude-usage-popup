@@ -6,6 +6,7 @@ import json
 
 import constants
 
+import subprocess
 import plotly.graph_objects as go
 
 print(platform.system())
@@ -81,7 +82,7 @@ def get_usage_and_update_ui():
             margin=dict(t=10, b=10, l=10, r=10),
             height=250
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="fivehour")
         # ==== 차트 그리기(5시간 사용량) ====
         
         # ==== 차트 그리기(일주일 사용량) ====
@@ -110,10 +111,12 @@ def get_usage_and_update_ui():
             margin=dict(t=10, b=10, l=10, r=10),
             height=250
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="sevenday")
         # ==== 차트 그리기(일주일 사용량) ====
         
     except Exception as e:
-            st.error(f"Something Wrong... => {e}")
+        st.error(f"Something Wrong... => {e}")
+        prompt_result = subprocess.run("claude --version", shell=True, capture_output=True, text=True)
+        print(f"Output ==> {prompt_result.stdout}")
             
 get_usage_and_update_ui()
