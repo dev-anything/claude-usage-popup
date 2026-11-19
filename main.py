@@ -1,4 +1,3 @@
-from pathlib import Path
 import json
 import requests
 import platform
@@ -9,8 +8,8 @@ import sys
 class Agentinfo:
     def __init__(self, agent_name):
         self.__agent_name = agent_name
-        self.__credential_path = self.save_credential_path()
-        self.__access_token = self.save_access_token(self.__credential_path)
+        self.save_credential_path()
+        self.save_access_token()
         self.__agent_version = self.save_agent_version(self.__agent_name)
         
         print(f"Initialize done.")
@@ -22,16 +21,13 @@ class Agentinfo:
         user_os = platform.system()
         
         if (user_os == "Windows"):
-            username = getpass.getuser()
-            
-            user_path = f"C:\\Users\\{username}\\.claude\\.credentials.json"
-            return Path(user_path)
+            self.__credential_path = f"C:\\Users\\{getpass.getuser()}\\.claude\\.credentials.json"
         
     # 멤버변수 access_token에 저장
-    def save_access_token(self, credential_path):
-        with open(credential_path, "r", encoding="utf-8") as f:
+    def save_access_token(self):
+        with open(self.__credential_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data["claudeAiOauth"]["accessToken"]
+            self.__access_token = data["claudeAiOauth"]["accessToken"]
         
     # 에이전트 버전 구하기
     def save_agent_version(self, agent_name):
@@ -41,12 +37,15 @@ class Agentinfo:
         version = (prompt_result.stdout).split(maxsplit=1)[0]
         return version
         
+    def get_credential_path(self):
+        return self.__credential_path
     # access_token 가져오기
     def get_access_token(self):
         return self.__access_token
     
     def get_agent_version(self):
         return self.__agent_version
+        #return "2.1.327"
 
     def get_agent_name(self):
         return self.__agent_name
@@ -63,15 +62,42 @@ class AgentApiClient:
         self.__usage_url = "https://api.anthropic.com/api/oauth/usage"
         print("[DONE] HTTP Headers set.")
     
-    def get_usage(self):
-        response = requests.get(self.__usage_url, headers=self.__http_headers)
+    def get_usage(self, agent):
+        try:
+            print(f"version: {self.__http_headers["User-Agent"]}")
+            response = requests.get(self.__usage_url, headers=self.__http_headers)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            #print(f"[ERROR] HTTP Error ==> {e.response.status_code}")
+            
+            # 토큰 갱신하기
+            if (e.response.status_code == 401):
+                print(f"[CODE] ==> {e.response.status_code}")
+                #path = agent.get_credential_path()
+                #print(f"[GET] Credential path ==> {path}")
+                agent.save_access_token()
+                
+                #print(agent.get_access_token())
+                
+                self.__http_headers["Authorization"] = f"Bearer {agent.get_access_token()}"
+
+                print(f"[HEADER] http header: {self.__http_headers}")
+
+                response = requests.get(self.__usage_url, headers=self.__http_headers)
+            
+        except requests.exceptions.RequestException as e:
+            print(f"[FAILED] Requests Failed ==> {e}")
         
-        with open("usage.json", "w", encoding="utf-8") as f:
-            f.write(response.text)
+        finally:
+            with open("usage.json", "w", encoding="utf-8") as f:
+                f.write(response.text)
+            
+            print(response.text)
+            
+            return response.json()
         
-        print(response.text)
         
-        return response.json()
+        
     
     
 
@@ -82,10 +108,12 @@ if __name__ == "__main__":
     
     agent = Agentinfo(sys.argv[1])
     client = AgentApiClient(
-        agent.get_access_token(),
+        #agent.get_access_token(),
+        "sk-ant",
         agent.get_agent_name(),
         agent.get_agent_version()
+        #"2.1.327"
     )
     
-    client.get_usage()
+    client.get_usage(agent)
     
