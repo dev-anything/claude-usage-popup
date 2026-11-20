@@ -4,6 +4,8 @@ import platform
 import getpass
 import subprocess
 import sys
+import streamlit as st
+import plotly.graph_objects as go
 
 class Agentinfo:
     def __init__(self, agent_name):
@@ -13,9 +15,9 @@ class Agentinfo:
         self.__agent_version = self.save_agent_version(self.__agent_name)
         
         print(f"Initialize done.")
-        print(f"[SAVED] Credential path: {self.__credential_path}")
-        print(f"[SAVED] Access token: {self.__access_token}")
-        print(f"[SAVED] {self.__agent_name} agent version: {self.__agent_version}")
+        #print(f"[SAVED] Credential path: {self.__credential_path}")
+        #print(f"[SAVED] Access token: {self.__access_token}")
+        #print(f"[SAVED] {self.__agent_name} agent version: {self.__agent_version}")
     
     def save_credential_path(self):
         user_os = platform.system()
@@ -60,11 +62,12 @@ class AgentApiClient:
             "anthropic-beta": "oauth-2025-04-20"
         }
         self.__usage_url = "https://api.anthropic.com/api/oauth/usage"
+        
         print("[DONE] HTTP Headers set.")
     
     def get_usage(self, agent):
         try:
-            print(f"version: {self.__http_headers["User-Agent"]}")
+            #print(f"version: {self.__http_headers["User-Agent"]}")
             response = requests.get(self.__usage_url, headers=self.__http_headers)
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
@@ -81,7 +84,7 @@ class AgentApiClient:
                 
                 self.__http_headers["Authorization"] = f"Bearer {agent.get_access_token()}"
 
-                print(f"[HEADER] http header: {self.__http_headers}")
+                #print(f"[HEADER] http header: {self.__http_headers}")
 
                 response = requests.get(self.__usage_url, headers=self.__http_headers)
             
@@ -97,10 +100,81 @@ class AgentApiClient:
             return response.json()
         
         
+class Screen:
+    def __init__(self, screen_name):
+        self.__screen_name = screen_name
+        self.__count = 0
+    @st.fragment(run_every="1m")
+    def update_screen(self, client, agent):
+        self.__count = self.__count + 1
+        st.title(self.__screen_name)
+        st.write(self.__count)
+        usage = client.get_usage(agent)
         
-    
-    
-
+        
+        five_hour = usage["five_hour"]
+        seven_day = usage["seven_day"]
+        
+        # ==== 차트 그리기(5시간 사용량) ====
+        five_hour_usage = five_hour["utilization"]
+        
+        labels = ["used", "remain"]
+        values = [five_hour_usage, 100 - five_hour_usage]
+        colors = ["#FF4B4B", "#E6EAF1"]
+        
+        fig = go.Figure(
+            data = [
+                go.Pie(
+                    labels=labels,
+                    values=values,
+                    hole=0.7,
+                    marker_colors=colors,
+                    textinfo="none",
+                    #hoverinfo="label+percent",
+                    sort=False
+                )
+            ]
+        )
+        
+        fig.update_layout(
+            showlegend=False,
+            margin=dict(t=10, b=10, l=10, r=10),
+            height=250
+        )
+        st.plotly_chart(fig, width="stretch", key="fivehour")
+        # ==== 차트 그리기(5시간 사용량) ====
+        
+        # ==== 차트 그리기(일주일 사용량) ====
+        seven_day_usage = seven_day["utilization"]
+        
+        labels = ["used", "remain"]
+        values = [seven_day_usage, 100 - seven_day_usage]
+        colors = ["#FF4B4B", "#E6EAF1"]
+        
+        fig = go.Figure(
+            data = [
+                go.Pie(
+                    labels=labels,
+                    values=values,
+                    hole=0.7,
+                    marker_colors=colors,
+                    textinfo="none",
+                    #hoverinfo="label+percent",
+                    sort=False
+                )
+            ]
+        )
+        
+        fig.update_layout(
+            showlegend=False,
+            margin=dict(t=10, b=10, l=10, r=10),
+            height=250
+        )
+        st.plotly_chart(fig, width="stretch", key="sevenday")
+        # ==== 차트 그리기(일주일 사용량) ====
+        
+        
+ 
 if __name__ == "__main__":
     if (len(sys.argv) < 2):
         print("사용법: python main.py <agent_name>")
@@ -108,12 +182,20 @@ if __name__ == "__main__":
     
     agent = Agentinfo(sys.argv[1])
     client = AgentApiClient(
-        #agent.get_access_token(),
-        "sk-ant",
+        agent.get_access_token(),
+        #"sk-ant",
         agent.get_agent_name(),
         agent.get_agent_version()
         #"2.1.327"
     )
     
-    client.get_usage(agent)
+    screen = Screen("claude usage")
+    
+    st.set_page_config(
+        page_title="Claude Usage Board"
+    )
+    
+    screen.update_screen(client, agent)
+
+    #usage = client.get_usage(agent)
     
